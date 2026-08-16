@@ -17,8 +17,10 @@ async fn main(_spawner: Spawner) {
 
     // USART1：PB7 接收扫码枪（115200，默认值）
     let mut rx = UartRx::new_blocking(p.USART1, p.PB7, UartConfig::default()).unwrap();
-    // USART2：PD5 发送指令到串口屏（115200，默认值）
-    let mut tx = UartTx::new_blocking(p.USART2, p.PD5, UartConfig::default()).unwrap();
+    // USART2：PD5 发送指令到串口屏（9600，匹配屏幕出厂默认波特率）
+    let mut screen_cfg = UartConfig::default();
+    screen_cfg.baudrate = 9600;
+    let mut tx = UartTx::new_blocking(p.USART2, p.PD5, screen_cfg).unwrap();
 
     let mut input = InputBuf::new();
     let mut byte = [0u8; 1];
@@ -32,7 +34,7 @@ async fn main(_spawner: Spawner) {
                 defmt::info!("match: {}", code);
 
                 let mut cmd = [0u8; 32];
-                let len = build_cmd("main.t0.txt", code, &mut cmd);
+                let len = build_cmd("t0.txt", code, &mut cmd);
                 tx.blocking_write(&cmd[..len]).unwrap();
             }
         }
