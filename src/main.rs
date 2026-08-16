@@ -25,35 +25,32 @@ async fn main(_spawner: Spawner) {
     let mut input = InputBuf::new();
     let mut byte = [0u8; 1];
 
-    // 收发循环：收字节 → 攒行 → 匹配 → 拼指令 → 发送
+    // 收发循环：收字节 → 攒行 → 透传到串口屏
     loop {
         rx.blocking_read(&mut byte).unwrap();
 
         if let Some(line) = input.feed(byte[0]) {
-            if let Some(code) = question_code(line) {
-                defmt::info!("match: {}", code);
+            defmt::info!("recv: {}", line);
 
-                let mut cmd = [0u8; 32];
-                let len = build_cmd("t0.txt", code, &mut cmd);
-                tx.blocking_write(&cmd[..len]).unwrap();
-            }
+            let mut cmd = [0u8; 280];
+            let len = build_cmd("t0.txt", line, &mut cmd);
+            tx.blocking_write(&cmd[..len]).unwrap();
         }
     }
 }
 
-/// 「第1道题」→ Some("01")，匹配不上返回 None。
-/// 注意：matcher.rs 里的 Question 目前是注释状态，这里先内联一份。
-fn question_code(s: &str) -> Option<&'static str> {
-    match s {
-        "第1道题" => Some("01"),
-        "第2道题" => Some("02"),
-        "第3道题" => Some("03"),
-        "第4道题" => Some("04"),
-        "第5道题" => Some("05"),
-        "第6道题" => Some("06"),
-        _ => None,
-    }
-}
+// 匹配逻辑已移除：不知道扫码枪会输入什么，改成透传（收到什么就显示什么）。
+// fn question_code(s: &str) -> Option<&'static str> {
+//     match s {
+//         "第1道题" => Some("01"),
+//         "第2道题" => Some("02"),
+//         "第3道题" => Some("03"),
+//         "第4道题" => Some("04"),
+//         "第5道题" => Some("05"),
+//         "第6道题" => Some("06"),
+//         _ => None,
+//     }
+// }
 
 /// 拼 TJC 指令：name="code"\xFF\xFF\xFF，返回写入的字节数。
 /// 注意：screen.rs 里的 build_cmd 是私有函数，这里先内联一份。
