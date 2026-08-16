@@ -29,7 +29,7 @@ impl<'a, const T: usize> Object<'a, T> {
 }
 
 /// 串口发送抽象
-/// N = 控件个数，C = 每个控件的 context 大小
+/// N = 控件个数，T = 每个控件的 context 大小
 pub trait SerialHandle<const N: usize, const T: usize> {
     fn refresh(&mut self, objs: &[Object<'_,T>; N]) -> Result<(), ()>;
 }
@@ -40,7 +40,9 @@ pub struct Screen<'a, const N: usize, const T: usize, S: SerialHandle<N, T>> {
     pub objects: [Object<'a, T>; N],
 }
 
-fn build_cmd (name:&str,context:&[u8],len:usize,buf:&mut [u8])-> usize {
+
+    
+pub fn build_cmd (name:&str,context:&[u8],len:usize,buf:&mut [u8])-> usize {
 
     let mut i = 0 ;
     buf[i..i+name.len()].copy_from_slice(name.as_bytes());
@@ -64,21 +66,21 @@ fn build_cmd (name:&str,context:&[u8],len:usize,buf:&mut [u8])-> usize {
 
 }
 
-pub struct MockSerial{
-    pub buf:[u8;256],
-    pub len:usize,
-}
+// pub struct MockSerial{
+//     pub buf:[u8;256],
+//     pub len:usize,
+// }
 
-impl <const N:usize,const T: usize> SerialHandle<N,T>for MockSerial{
-    fn refresh(&mut self,objs:&[Object<'_,T>;N])->Result<(),()>{
-        let mut pos =0 ;
-        for obj in objs.iter()  {
-            pos+= build_cmd(obj.name,&obj. context,obj. len,&mut  self.buf[pos..]);
+// impl <const N:usize,const T: usize> SerialHandle<N,T>for MockSerial{
+//     fn refresh(&mut self,objs:&[Object<'_,T>;N])->Result<(),()>{
+//         let mut pos =0 ;
+//         for obj in objs.iter()  {
+//             pos+= build_cmd(obj.name,&obj. context,obj. len,&mut  self.buf[pos..]);
        
-        }
-        self.len = pos;
-        Ok(())
+//         }
+//         self.len = pos;
+//         Ok(())
 
-    }
+//     }
     
-}
+// }

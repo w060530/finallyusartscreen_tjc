@@ -1,6 +1,6 @@
 
 pub trait Tostr{
-    fn to_str<'a>(&self,buf: &'a mut [u8])-> &'a str; 
+    fn to_str<'a>(&self,buf: &'a mut [u8])-> &'a str;
 
 }
 
@@ -63,9 +63,6 @@ fn write_u32(mut n: u32, buf: &mut [u8], mut idx: usize) -> usize {
 }
 
 impl Tostr for f64 {
-    
-
-    
     fn to_str<'a>(&self, buf: &'a mut [u8]) -> &'a str {
         let mut idx = 0usize;
 
@@ -78,7 +75,8 @@ impl Tostr for f64 {
 
         // ② 拆整数部分 + 小数部分（保留 2 位）
         let mut int_part = v as i64;                    // 截断取整数
-        let mut frac = ((v - int_part as f64) * 100.0).round() as u32;
+        // no_std 下没有 f64::round()，用「+0.5 再截断」等价实现四舍五入（v 已 abs 为非负）
+        let mut frac = ((v - int_part as f64) * 100.0 + 0.5) as u32;
 
         // ③ 处理四舍五入进位（3.999 → 4.00）
         if frac >= 100 {
@@ -110,41 +108,31 @@ impl Tostr for bool {
     }
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// 一道题 = 3 个固定动作，依次显示到屏的 t0/t1/t2
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Question {
+    Q1, Q2, Q3, Q4, Q5, Q6,
+}
 
-// pub enum Question {
-//     Q1, Q2, Q3, Q4, Q5, Q6,
-// }
+impl Question {
+    /// 条码 → 题目（⚠️ 扫码枪条码格式还没定，先占位，之后补真实条码）
+    pub fn from_barcode(s: &str) -> Option<Self> {
+        match s {
+            "第1道题" => Some(Question::Q1),
+            // TODO: 等扫码枪条码格式确定后，补 Q2~Q6 的真实条码
+            _ => None,
+        }
+    }
 
-// impl Question{
-//      pub fn from_str(s: impl Tostr) -> Option<Self> {
-//     let mut buf = [0u8; 64];
-//     let s: &str = s.to_str(&mut buf);
-
-//     match s {
-//         "第1道题" => Some(Question::Q1),
-//         "第2道题" => Some(Question::Q2),
-//         "第3道题" => Some(Question::Q3),
-//         "第4道题" => Some(Question::Q4),
-//         "第5道题" => Some(Question::Q5),
-//         "第6道题" => Some(Question::Q6),
-//         _ => None,
-//     }
-// }
-
-
-    
-    
-    
-//     pub fn code(self) -> &'static str {
-//     match self {
-//         Question::Q1 => "01",
-//         Question::Q2 => "02",
-//         Question::Q3 => "03",
-//         Question::Q4 => "04",
-//         Question::Q5 => "05",
-//         Question::Q6 => "06",
-//     }
-// }
-// }
-
+    /// 题目 → 3 个动作（固定，填 t0/t1/t2）
+    pub fn actions(self) -> [&'static str; 3] {
+        match self {
+            Question::Q1 => ["夹红色", "夹蓝色", "夹绿色"],
+            Question::Q2 => ["占位2", "占位2", "占位2"],
+            Question::Q3 => ["占位3", "占位3", "占位3"],
+            Question::Q4 => ["占位4", "占位4", "占位4"],
+            Question::Q5 => ["占位5", "占位5", "占位5"],
+            Question::Q6 => ["占位6", "占位6", "占位6"],
+        }
+    }
+}
