@@ -1,0 +1,11 @@
+[default.general]
+chip = "STM32F407VG" # 如果是其他芯片请修改此处
+
+[default.reset]
+halt_afterwards = true
+
+[default.rtt]
+enabled = true # 开启 RTT 打印，代码里的 defmt::info!() 会直接显示
+
+[default.gdb]
+enabled = false
