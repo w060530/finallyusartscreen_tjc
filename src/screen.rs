@@ -34,6 +34,12 @@ pub trait SerialHandle<const N: usize, const T: usize> {
     fn refresh(&mut self, objs: &[Object<'_,T>; N]) -> Result<(), ()>;
 }
 
+/// 单控件刷新抽象：只发一个控件，不涉及控件个数 N（否则调用时 N 无法推断）。
+/// 刷新哪个控件由传入的 obj 决定；T 只是每个控件的缓冲大小。
+pub trait RefreshOne<const T: usize> {
+    fn refresh_one(&mut self, obj: &Object<'_, T>) -> Result<(), ()>;
+}
+
 /// 串口屏：N 个控件 + 一个串口句柄
 pub struct Screen<'a, const N: usize, const T: usize, S: SerialHandle<N, T>> {
     pub serial: S,
