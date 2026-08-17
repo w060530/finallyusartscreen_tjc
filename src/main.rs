@@ -85,8 +85,8 @@ fn fill_auto<const T: usize>(line: &str, obj: &mut Object<'_, T>) {
 enum Stage {
     Qr,     // 阶段1：等二维码帧 "012345+543210"
     Rough,  // 阶段2：等粗糙位置帧 color(0~5) + X(i16) + Y(i16)
-    Points, // 阶段3：等 3 个坐标点帧（暂未实现）
-    Fine,   // 阶段4：等细定位帧（暂未实现）
+    Points, // 阶段3：等 3 个坐标点帧（3 个 X+Y 点）
+    Fine,   // 阶段4：等细定位帧（1 个 X+Y 点）
 }
 
 #[embassy_executor::main]
@@ -126,10 +126,13 @@ async fn main(_spawner: Spawner) {
     let mut parser = FrameParser::new();
     let mut byte = [0u8; 1];
 
-    // 当前协议阶段 + 阶段2 拼出来的坐标（存两个变量）
+    // 当前协议阶段 + 阶段2 粗糙坐标（存 x/y）+ 阶段3 的 3 个点（存数组）+ 阶段4 细定位（存 fx/fy）
     let mut stage = Stage::Qr;
     let mut x: i16;
     let mut y: i16;
+    let mut pts: [(i16, i16); 3] = [(0, 0); 3];
+    let mut fx: i16;
+    let mut fy: i16;
 
     // 收帧 → 按阶段处理
     loop {
@@ -140,7 +143,8 @@ async fn main(_spawner: Spawner) {
             match stage {
                 Stage::Qr => {
                     if body == &b"012345+543210"[..] {
-                        defmt::info!("got QR frame");
+                        let qr = core::str::from_utf8(body).unwrap();
+                        defmt::info!("got QR frame: {}", qr);
 
                         // ① 串口屏打印 body（只发 t0，t1/t2 保持屏初始值 00000000 不动）
                         screen.objects[0].set_context(body);
@@ -171,8 +175,39 @@ async fn main(_spawner: Spawner) {
                         stage = Stage::Points;
                     }
                 }
-                Stage::Points | Stage::Fine => {
-                    // 阶段3/4 暂未实现
+                Stage::Points => {
+                    // body = 3 个点，每个点 [X高,X低,Y高,Y低]，共 12 字节数字值
+                    if body.len() == 12 {
+                        for i in 0..3 {
+                            let off = i * 4;
+                            pts[i] = (
+                                u8_to_i16(body[off], body[off + 1]),
+                                u8_to_i16(body[off + 2], body[off + 3]),
+                            );
+                        }
+                        defmt::info!(
+                            "points p0=({},{}) p1=({},{}) p2=({},{})",
+                            pts[0].0, pts[0].1, pts[1].0, pts[1].1, pts[2].0, pts[2].1
+                        );
+
+                        // 回发 'C'（Python 收到后进入阶段4）
+                        tx_pc.blocking_write(b"C").unwrap();
+
+                        stage = Stage::Fine;
+                    }
+                }
+                Stage::Fine => {
+                    // body = [X高,X低,Y高,Y低]，1 个细定位点，4 字节数字值
+                    if body.len() == 4 {
+                        fx = u8_to_i16(body[0], body[1]);
+                        fy = u8_to_i16(body[2], body[3]);
+                        defmt::info!("fine x={} y={}", fx, fy);
+
+                        // 回发 'X'（Python 收到后结束整个流程）
+                        tx_pc.blocking_write(b"X").unwrap();
+
+                        // 协议到此结束，停在 Fine 不再切换
+                    }
                 }
             }
         }
