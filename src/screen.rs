@@ -1,6 +1,9 @@
 
 
 
+use embassy_stm32::mode::Async;
+use embassy_stm32::usart::UartTx;
+
 /// 屏上的一个控件
 /// C = context 缓冲区大小（如 128）
 pub struct Object<'a, const T: usize> {
@@ -40,6 +43,31 @@ pub trait RefreshOne<const T: usize> {
     fn refresh_one(&mut self, obj: &Object<'_, T>) -> Result<(), ()>;
 }
 
+/// 真串口实现：把 UartTx 包装成 SerialHandle，refresh 时把每个控件的指令发到串口屏。
+pub struct UsartHandle<'d> {
+    pub tx: UartTx<'d, Async>,
+}
+
+impl<'d, const N: usize, const T: usize> SerialHandle<N, T> for UsartHandle<'d> {
+    fn refresh(&mut self, objs: &[Object<'_, T>; N]) -> Result<(), ()> {
+        let mut buf = [0u8; 256];
+        for obj in objs.iter() {
+            let len = build_cmd(obj.name, &obj.context, obj.len, &mut buf);
+            self.tx.blocking_write(&buf[..len]).map_err(|_| ())?;
+        }
+        Ok(())
+    }
+}
+
+/// 单控件刷新：只发一个控件，不动其余控件。
+impl<'d, const T: usize> RefreshOne<T> for UsartHandle<'d> {
+    fn refresh_one(&mut self, obj: &Object<'_, T>) -> Result<(), ()> {
+        let mut buf = [0u8; 256];
+        let len = build_cmd(obj.name, &obj.context, obj.len, &mut buf);
+        self.tx.blocking_write(&buf[..len]).map_err(|_| ())
+    }
+}
+
 /// 串口屏：N 个控件 + 一个串口句柄
 pub struct Screen<'a, const N: usize, const T: usize, S: SerialHandle<N, T>> {
     pub serial: S,
@@ -72,21 +100,3 @@ pub fn build_cmd (name:&str,context:&[u8],len:usize,buf:&mut [u8])-> usize {
 
 }
 
-// pub struct MockSerial{
-//     pub buf:[u8;256],
-//     pub len:usize,
-// }
-
-// impl <const N:usize,const T: usize> SerialHandle<N,T>for MockSerial{
-//     fn refresh(&mut self,objs:&[Object<'_,T>;N])->Result<(),()>{
-//         let mut pos =0 ;
-//         for obj in objs.iter()  {
-//             pos+= build_cmd(obj.name,&obj. context,obj. len,&mut  self.buf[pos..]);
-       
-//         }
-//         self.len = pos;
-//         Ok(())
-
-//     }
-    
-// }
