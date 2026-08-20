@@ -1,21 +1,27 @@
 #![no_std]
 #![no_main]
 
-
+mod command;
 mod protocol;
 mod screen;
-mod command;
 
+use command::RingBuffer;
+use cortex_m::prelude::_embedded_hal_Pwm;
 use embassy_executor::Spawner;
 use embassy_stm32::bind_interrupts;
 use embassy_stm32::dma;
 use embassy_stm32::peripherals;
+use embassy_stm32::time::Hertz;
+use embassy_stm32::timer::Channel;
+use embassy_stm32::timer::{
+    low_level::CountingMode,
+    simple_pwm::{PwmPin, SimplePwm},
+};
 use embassy_stm32::usart::{self, Config as UartConfig, Uart, UartTx};
 use embassy_time::{Duration, Timer};
 use embedded_hal_nb::nb;
 use embedded_hal_nb::serial::Read;
-use command::RingBuffer;
-use protocol::{handle_fine, handle_material, handle_rough, handle_scan, Stage};
+use protocol::{Stage, handle_fine, handle_material, handle_rough, handle_scan};
 use screen::{Object, Screen, UsartHandle};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -32,9 +38,39 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_stm32::init(Default::default());
 
+    let root_pin = PwmPin::new(p.PE9, embassy_stm32::gpio::OutputType::PushPull);
+    let paw_pin = PwmPin::new(p.PE11, embassy_stm32::gpio::OutputType::PushPull);
+    let plate_pin = PwmPin::new(p.PE13, embassy_stm32::gpio::OutputType::PushPull);
+
+    let mut pwm = SimplePwm::new(
+        p.TIM1,
+        Some(root_pin),  // CH1
+        Some(paw_pin),   // CH2
+        Some(plate_pin), // CH3
+        None,            // CH4
+        Hertz(50),
+        CountingMode::EdgeAlignedUp,
+    );
+
+    pwm.enable(Channel::Ch3);
+    let mut i = 8000;
+    while i <= 10000 {
+        pwm.ch3().set_duty_cycle(i);
+        i += 200;
+    }
+
     // 电脑通信：USART1 PA9=TX, PA10=RX（115200）
-    let uart = Uart::new(p.USART1, p.PA10, p.PA9, p.DMA2_CH7, p.DMA2_CH2, Irqs, UartConfig::default()).unwrap();
-    let (mut tx_pc,  rx) = uart.split();
+    let uart = Uart::new(
+        p.USART1,
+        p.PA10,
+        p.PA9,
+        p.DMA2_CH7,
+        p.DMA2_CH2,
+        Irqs,
+        UartConfig::default(),
+    )
+    .unwrap();
+    let (mut tx_pc, rx) = uart.split();
     let rx_buf: &'static mut [u8] = unsafe {
         static mut BUF: [u8; 256] = [0u8; 256];
         &mut *(&raw mut BUF)
@@ -71,21 +107,28 @@ async fn main(_spawner: Spawner) {
     let mut fy: i16 = 0;
     let mut scan_result: Option<protocol::ScanResult> = None;
 
-    // 
-        // 非阻塞收帧 → 按阶段处理
+    //
+    // 非阻塞收帧 → 按阶段处理
     loop {
         // 1) 非阻塞把 DMA 缓冲里当前已有的字节搬进 RingBuffer
         loop {
             match Read::read(&mut rx) {
-                Ok(b) => { ring.write(&[b]); }
+                Ok(b) => {
+                    ring.write(&[b]);
+                }
                 Err(nb::Error::WouldBlock) => break,
-                Err(nb::Error::Other(_)) => { rx.start_uart(); break; }
+                Err(nb::Error::Other(_)) => {
+                    rx.start_uart();
+                    break;
+                }
             }
         }
         // 2) 从 RingBuffer 取完整帧，逐帧处理
         loop {
             let n = ring.get_command(&mut cmd_buf);
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             let body = &cmd_buf[1..n - 1];
             stage = match stage {
                 Stage::Scan => {
@@ -101,5 +144,4 @@ async fn main(_spawner: Spawner) {
         // 3) 让出 CPU，避免忙等
         Timer::after(Duration::from_millis(1)).await;
     }
-
 }

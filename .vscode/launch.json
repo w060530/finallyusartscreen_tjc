@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "name": "probe-rs Test",
+            "cwd": "${workspaceFolder}",
+            "connectUnderReset": false,
+            "chip": "STM32F407VGTx",
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "verifyBeforeFlashing": true,
+                "verifyAfterFlashing": true,
+                "haltAfterReset": true
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "target\\thumbv7em-none-eabihf\\debug\\usartscreen"
+                }
+            ]
+        }
+        
+    ]
+}
